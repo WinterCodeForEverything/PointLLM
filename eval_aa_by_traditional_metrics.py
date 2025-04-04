@@ -164,7 +164,6 @@ class TraditionalMetricEvaluator():
             print(f"Average {metric.upper()} Score: {np.mean(scores):.4f}")
 
 
-
 def start_evaluation(results, output_dir, output_file,
                         parallel=True, num_workers=20):
     """

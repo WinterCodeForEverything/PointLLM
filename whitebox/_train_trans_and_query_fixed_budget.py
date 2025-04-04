@@ -63,20 +63,6 @@ def get_dataloader(dataset, batch_size, shuffle=False, num_workers=4):
     return dataloader
 
 
-
-def generate_output_embedding(model, input_ids, point_clouds ):
-    model.eval() 
-    with torch.no_grad():
-        outputs = model(
-            input_ids,
-            point_clouds=point_clouds,
-            output_hidden_states=True,
-            )
-    last_hidden_state = outputs.hidden_states[-1]
-    output_embedding = last_hidden_state.mean(dim=1)
-
-    return output_embedding
-
 def generate_caption(model, tokenizer, input_ids, point_clouds, stopping_criteria, do_sample=True, temperature=1.0, top_k=50, max_length=2048, top_p=0.95):
     model.eval() 
     with torch.inference_mode():
@@ -100,67 +86,6 @@ def generate_caption(model, tokenizer, input_ids, point_clouds, stopping_criteri
 
     return outputs
 
-# def start_generation(model, tokenizer, conv, dataloader, annos, prompt_index, output_dir, output_file):
-#     stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
-#     qs = PROMPT_LISTS[prompt_index]
-
-#     results = {"prompt": qs}
-
-#     point_backbone_config = model.get_model().point_backbone_config
-#     point_token_len = point_backbone_config['point_token_len']
-#     default_point_patch_token = point_backbone_config['default_point_patch_token']
-#     default_point_start_token = point_backbone_config['default_point_start_token']
-#     default_point_end_token = point_backbone_config['default_point_end_token']
-#     mm_use_point_start_end = point_backbone_config['mm_use_point_start_end']
-
-#     if mm_use_point_start_end:
-#         qs = default_point_start_token + default_point_patch_token * point_token_len + default_point_end_token + '\n' + qs
-#     else:
-#         qs = default_point_patch_token * point_token_len + '\n' + qs
-    
-#     conv.append_message(conv.roles[0], qs)
-#     conv.append_message(conv.roles[1], None)
-
-#     prompt = conv.get_prompt()
-#     inputs = tokenizer([prompt])
-
-#     input_ids_ = torch.as_tensor(inputs.input_ids).cuda() # * tensor of 1, L
-
-#     stopping_criteria = KeywordsStoppingCriteria([stop_str], tokenizer, input_ids_)
-
-#     responses = []
-
-#     for batch in tqdm(dataloader):
-#         point_clouds = batch["point_clouds"].cuda().to(model.dtype) # * tensor of B, N, C(3)
-#         object_ids = batch["object_ids"] # * list of string 
-
-#         batchsize = len(object_ids)
-
-#         input_ids = input_ids_.repeat(batchsize, 1) # * tensor of B, L
-
-#         outputs = generate_outputs(model, tokenizer, input_ids, point_clouds, stopping_criteria) # List of str, length is B
-
-#         # saving results
-#         for obj_id, output in zip(object_ids, outputs):
-#             responses.append({
-#                 "object_id": obj_id,
-#                 "ground_truth": annos[obj_id],
-#                 "model_output": output
-#             })
-    
-#     results["results"] = responses
-
-#     os.makedirs(output_dir, exist_ok=True)
-#     # save the results to a JSON file
-#     with open(os.path.join(output_dir, output_file), 'w') as fp:
-#         json.dump(results, fp, indent=2)
-
-#     # * print info
-#     print(f"Saved results to {os.path.join(output_dir, output_file)}")
-
-#     return results
-
-
 def get_text_embedding(captions, tokenizer, txt_encoder, max_length=None):
     """
     Generate text embeddings for the given captions using the tokenizer and text encoder.
@@ -176,22 +101,11 @@ def get_text_embedding(captions, tokenizer, txt_encoder, max_length=None):
     """
     inputs = tokenizer(captions, max_length=max_length, padding="max_length", truncation=True, return_tensors="pt")
     input_ids = inputs.input_ids.to(device)
-    attention_mask = inputs.attention_mask.to(device)  # Get the attention mask
-    #print(attention_mask.shape)
 
     # Get the output embeddings from the text encoder
-    outputs = txt_encoder(input_ids)  # Pass the attention mask to the encoder
-    text_embedding = torch.sum(outputs*attention_mask[:,:,None], dim=1) / attention_mask.sum(dim=1, keepdim=True)  # Average pooling over the sequence length
-    input_ids = inputs.input_ids.to(device)  
+    outputs = txt_encoder(input_ids)
+    text_embedding = torch.mean(outputs, dim=1)  # Average pooling over the sequence length
 
-    # # Get the output embeddings from the text encoder
-    # outputs = txt_encoder(input_ids)
-    # text_embedding = torch.mean(outputs, dim=1)  # Average pooling over the sequence length
-    
-    # # Extract the embedding of the special token (e.g., [CLS] token)
-    # # Assuming the encoder outputs a sequence of embeddings
-    # text_embedding = outputs.last_hidden_state[:, special_token_idx, :]
-    
     # Normalize the embedding
     text_embedding = text_embedding / text_embedding.norm(dim=-1, keepdim=True)
     text_embedding = text_embedding.detach()
@@ -265,38 +179,12 @@ def main(args):
     adv_text_feature = get_text_embedding(adv_captions, tokenizer, txt_encoder, max_length)
     tgt_text_feature = get_text_embedding(tgt_captions, tokenizer, txt_encoder, max_length)
     
-    # adv_token = tokenizer(
-    #     adv_captions,
-    #     padding="max_length",
-    #     truncation=True,
-    #     max_length=max_length,
-    #     return_tensors="pt"
-    # )
-    # adv_text_feature = txt_encoder(adv_token.input_ids.to(device))
-    # adv_text_feature = torch.mean(adv_text_feature, dim=1)
-    # adv_text_feature = adv_text_feature / adv_text_feature.norm(dim=-1, keepdim=True)
-    # adv_text_feature = adv_text_feature.detach()
-
-    # tgt_token = tokenizer(
-    #     tgt_captions,
-    #     padding="max_length",
-    #     truncation=True,
-    #     max_length=max_length,
-    #     return_tensors="pt"
-    # )
-    # tgt_text_feature = txt_encoder(tgt_token.input_ids.to(device))
-    # tgt_text_feature = torch.mean(tgt_text_feature, dim=1)
-    # tgt_text_feature = tgt_text_feature / tgt_text_feature.norm(dim=-1, keepdim=True)
-    # tgt_text_feature = tgt_text_feature.detach() 
-    
     init_embedding_similarity    = torch.sum(adv_text_feature.float() * tgt_text_feature.float(), dim=-1).cpu().numpy()
     query_attack_results  = torch.sum(adv_text_feature.float() * tgt_text_feature.float(), dim=-1).cpu().numpy()
     
     # print(f"adv_text_feature.shape: {adv_text_feature.shape}")
     # print(f"tgt_text_feature.shape: {tgt_text_feature.shape}")
     
-    
-
     # the adverearial dataset from MF-pp as original dataset for MF-tt
     clean_dataset = load_dataset(args.ori_data_path, args.ori_anno_path, args.pointnum, ("simple_description",), args.use_color)
     ori_dataset = load_dataset(args.adv_data_path, args.adv_anno_path, args.pointnum, ("simple_description",), args.use_color)

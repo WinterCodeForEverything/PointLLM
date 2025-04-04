@@ -82,7 +82,6 @@ def main(args):
         tgt_pc = tgt_pc.to(device)
         with torch.no_grad():
             tgt_feature = pc_encoder(tgt_pc.to(torch.bfloat16))
-            #print(tgt_feature.shape)
             if torch.isnan(tgt_feature).any():
                 print(f"NaN detected in tgt_feature. Skip this sample.")
                 continue
@@ -108,13 +107,12 @@ def main(args):
             delta.data = d
             delta.grad.zero_()
 
-
             # Log metrics to wandb
             if args.wandb:
                 wandb.log({
                     f"embedding_similarity_{i}": embedding_sim.item(),
-                    f"max_delta_{i}": torch.max(torch.abs(d)).item(),
-                    f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
+                    # f"max_delta_{i}": torch.max(torch.abs(d)).item(),
+                    # f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
                 })
             print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
     
@@ -135,7 +133,7 @@ if __name__ == '__main__':
         default="RunsenXu/PointLLM_7B_v1.2") 
     
     parser.add_argument("--alpha", type=float, default=0.01)
-    parser.add_argument("--epsilon", type=int, default=1)
+    parser.add_argument("--epsilon", type=float, default=1.0)
     parser.add_argument("--steps", type=int, default=300)
 
     # data 
