@@ -2,7 +2,7 @@
 
 
 # certain hyper-parameters can be modified based on user's preference
-CUDA_VISIBLE_DEVICES=1 \
+CUDA_VISIBLE_DEVICES=0 \
 python _train_trans_and_query_fixed_budget.py \
     --model_name 'RunsenXu/PointLLM_7B_v1.2' \
     --ori_data_path '/mnt/ssd/liuchao/PointLLM/Objaverse_npy' \
@@ -20,6 +20,6 @@ python _train_trans_and_query_fixed_budget.py \
     --steps 8 \
     --use_color \
     --max_caption_length 256 \
-    --wandb \
-    --wandb_project_name 'PointLLM' \
-    --wandb_run_name 'eva_pp+tt_vary_embedding_length' 
+    # --wandb \
+    # --wandb_project_name 'PointLLM' \
+    # --wandb_run_name 'eva_pp+tt_chose_last_token_embedding' 
