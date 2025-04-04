@@ -1,7 +1,7 @@
 import os
 import json
-import torch
 import numpy as np
+import torch
 
 import copy
 import transformers
@@ -177,9 +177,11 @@ class ObjectPointCloudDataset(Dataset):
             if self.normalize_pc:
                 point_cloud = self.pc_norm(point_cloud) # * need to norm since point encoder is norm
 
+            #print( point_cloud.shape )
+            #test = torch.from_numpy(point_cloud.astype(np.float32)) 
             if self.tokenizer is None:
                 data_dict = dict(
-                    point_clouds=torch.from_numpy(point_cloud.astype(np.float32)),
+                    point_clouds= torch.from_numpy(point_cloud.astype(np.float32)),
                     object_ids=object_id
                 )
                 return data_dict

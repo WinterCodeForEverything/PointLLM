@@ -86,6 +86,35 @@ class PointLLMLlamaModel(LlamaModel):
 
     def load_point_backbone_checkpoint(self, checkpoint_path=None):
         self.point_backbone.load_checkpoint(self.config.point_backbone_ckpt if checkpoint_path is None else checkpoint_path)
+        
+    def get_pc_encoder(self):
+        class PointEncoder(nn.Module):
+            def __init__(self, point_backbone, point_proj):
+                super(PointEncoder, self).__init__()
+                self.point_backbone = point_backbone
+                self.point_proj = point_proj
+
+            def forward(self, point_clouds):
+                point_backbone = getattr(self, 'point_backbone', None)
+
+                if point_backbone is not None and point_clouds is not None:
+                    # * enter when training or the first generation step of inference
+                        self.point_backbone.eval()
+                        point_features = self.point_backbone(point_clouds)
+                return self.point_proj(point_features)
+
+        return PointEncoder(self.point_backbone, self.point_proj)
+    
+    def get_txt_encoder(self):
+        class TextEncoder(nn.Module):
+            def __init__(self, embed_tokens ):
+                super(TextEncoder, self).__init__()
+                self.embed_tokens = embed_tokens
+                
+            def forward(self, input_ids):
+                return self.embed_tokens(input_ids)
+        
+        return TextEncoder(self.embed_tokens)
 
     def forward(
         self,
@@ -192,6 +221,12 @@ class PointLLMLlamaForCausalLM(LlamaForCausalLM):
 
     def get_model(self):
         return self.model
+    
+    def get_txt_encoder(self):
+        return self.model.get_txt_encoder()
+    
+    def get_pc_encoder(self):
+        return self.model.get_pc_encoder()
 
     def forward(
         self,
