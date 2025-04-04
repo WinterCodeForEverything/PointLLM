@@ -69,6 +69,7 @@ class ModelNet(Dataset):
 
     def __len__(self):
         return len(self.list_of_labels)
+    
 
     def _get_item(self, index):
         point_set, label = self.list_of_points[index], self.list_of_labels[index]

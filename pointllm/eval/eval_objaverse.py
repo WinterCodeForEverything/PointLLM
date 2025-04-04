@@ -15,7 +15,7 @@ import os
 import json
 
 PROMPT_LISTS = [
-    "What is this?",
+    "What is this object? Please describe it in few words, including its color, category and possibly the key characteristics.",
     "This is an object of ",
     "Caption this 3D model in detail."
 ]
@@ -139,7 +139,7 @@ def start_generation(model, tokenizer, conv, dataloader, annos, prompt_index, ou
 
 def main(args):
     # * ouptut
-    args.output_dir = os.path.join(args.model_name, "evaluation")
+    #args.output_dir = os.path.join(args.model_name, "evaluation")
     
     # * output file 
     anno_file = os.path.splitext(os.path.basename(args.anno_path))[0]
@@ -190,6 +190,7 @@ if __name__ == "__main__":
     # * dataset type
     parser.add_argument("--data_path", type=str, default="data/objaverse_data", required=False)
     parser.add_argument("--anno_path", type=str, default="data/anno_data/PointLLM_brief_description_val_200_GT.json", required=False)
+    parser.add_argument("--output_dir", type=str, default="", required=False)
     parser.add_argument("--pointnum", type=int, default=8192)
     parser.add_argument("--use_color",  action="store_true", default=True)
 
