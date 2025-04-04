@@ -387,6 +387,8 @@ def main(args):
             print(f"{i}-th points // {step_idx}-th step // embedding similarity", current_embedding_similarity)
             if current_embedding_similarity > query_attack_results[i]:
                     query_attack_results[i] = current_embedding_similarity
+                    
+            torch.cuda.empty_cache()
             
             
         if args.wandb:
