@@ -10,7 +10,7 @@ python _train_trans_and_query_fixed_budget.py \
     --ori_anno_path '/mnt/ssd/liuchao/PointLLM/PointLLM_brief_description_val_200_GT.json' \
     --adv_anno_path '/mnt/ssd/liuchao/PointLLM/PointLLM_brief_description_adv_200.json' \
     --mrg_output_file '/home/liuchao/PointLLM/result/PointLLM_brief_description_mrg_200_Objaverse_classification_prompt0.json' \
-    --output_pc_path '/home/liuchao/PointLLM/result/pp+tt_adv_pc' \
+    --output_pc_path '/home/liuchao/PointLLM/result/pointcloud' \
     --epsilon 1 \
     --alpha 0.01 \
     --batch_size 1 \
