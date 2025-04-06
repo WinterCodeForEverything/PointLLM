@@ -309,7 +309,7 @@ if __name__ == '__main__':
         default="RunsenXu/PointLLM_7B_v1.2") 
     
     parser.add_argument("--alpha", type=float, default=0.01)
-    parser.add_argument("--epsilon", type=int, default=1)
+    parser.add_argument("--epsilon", type=float, default=0.1)
     #parser.add_argument("--sigma", type=int, default=0.1)
     parser.add_argument("--num_query", type=int, default=10)
     parser.add_argument("--num_sub_query", type=int, default=1)
