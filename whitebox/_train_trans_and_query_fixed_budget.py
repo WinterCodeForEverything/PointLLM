@@ -194,7 +194,7 @@ def main(args):
     #tgt_dataloader = get_dataloader(tgt_dataset, args.batch_size, args.shuffle, args.num_workers)
     
     for i, (ori_data_dict, clean_data_dict) in enumerate(zip( ori_dataloader, clean_dataloader)):
-        _, clean_pc = clean_data_dict['object_ids'], clean_data_dict['point_clouds']
+        clean_object_ids, clean_pc = clean_data_dict['object_ids'], clean_data_dict['point_clouds']
         _, ori_pc = ori_data_dict['object_ids'], ori_data_dict['point_clouds']
         clean_pc = clean_pc.to(device)
         ori_pc = ori_pc.to(device)
@@ -277,14 +277,25 @@ def main(args):
                     query_attack_results[i] = current_embedding_similarity
                     
             torch.cuda.empty_cache()
-            
-            
+        
+
         if args.wandb:
             wandb.log({
                 f"init_embedding_similarity": np.mean(init_embedding_similarity[:(i+1)]),
                 f"embedding_similarity_after_query_attack": np.mean(query_attack_results[:(i+1)]),
             })
-            
+        
+        
+        
+        adv_pc = torch.clamp(clean_pc+delta, min=-epsilon, max=epsilon)
+        adv_pc = ori_pc + delta
+        for k, pc_id in enumerate(clean_object_ids):
+            output_adv_pc_path = os.path.join(output_pc_path, pc_id )
+            if not os.path.exists(output_adv_pc_path):
+                print(f"No Exixted directory: {output_adv_pc_path}")
+                continue
+            output_adv_pc_file = os.path.join(output_adv_pc_path, f"pp_tt_adv_{epsilon}.txt")
+            np.savetxt(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
 
     
     
