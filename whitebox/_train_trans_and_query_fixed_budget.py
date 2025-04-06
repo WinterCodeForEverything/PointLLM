@@ -207,7 +207,7 @@ def main(args):
         
         # ------------------- random gradient-free method
         print("init delta with diff(adv-clean)")
-        delta = torch.tensor((ori_pc - clean_pc))
+        delta = (ori_pc - clean_pc).clone().detach()
         torch.cuda.empty_cache()
         
         
