@@ -91,7 +91,7 @@ class TraditionalMetricEvaluator():
 
         # Calculate cosine similarity
         simcse_similarity = 1 - cosine(embeddings[0], embeddings[1]) # * consine actually calculates consine distance, which is 1 - consine similarity
-        
+        simcse_similarity = float(simcse_similarity)
         # calculate SimCSE similarity between adversarial caption and original caption
         # Tokenize input texts
         inputs_ori = self.simcse_tokenizer([ori_caption, adv_caption], padding=True, truncation=True, return_tensors="pt")
@@ -102,7 +102,8 @@ class TraditionalMetricEvaluator():
 
         # Calculate cosine similarity
         simcse_similarity_ori = 1 - cosine(embeddings_ori[0], embeddings_ori[1])
-
+        simcse_similarity_ori = float(simcse_similarity_ori)
+        
         scores = {
             'bleu-1': bleu_1_score * 100,
             'bleu-2': bleu_2_score * 100,
@@ -181,8 +182,8 @@ def start_evaluation(results, output_dir, output_file,
     evaluator.evaluate()
     
 if __name__ == '__main__':
-    results = './result/PointLLM_brief_description_mrg_200_Objaverse_classification_prompt0.json'
-    output_dir = './result/PointLLM_brief_description_200_Objaverse_classification_prompt0'
+    results = './result/noise_size_5_result/PointLLM_brief_description_mrg_200_Objaverse_classification_prompt0.json'
+    output_dir = './result/noise_size_5_result/MF_pp'
     if not os.path.exists(output_dir):
         os.makedirs(output_dir)
     output_file = 'traditional_metrics.json'
