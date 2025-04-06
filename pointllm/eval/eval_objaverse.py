@@ -9,7 +9,7 @@ from pointllm.model.utils import KeywordsStoppingCriteria
 from pointllm.data import ObjectPointCloudDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
-from pointllm.eval.evaluator import start_evaluation
+#from pointllm.eval.evaluator import start_evaluation
 
 import os
 import json
@@ -174,13 +174,13 @@ def main(args):
         with open(args.output_file_path, 'r') as fp:
             results = json.load(fp)
 
-    if args.start_eval:
-        evaluated_output_file = args.output_file.replace(".json", f"_evaluated_{args.gpt_type}.json")
-        eval_type_mapping = {
-            "captioning": "object-captioning",
-            "classification": "open-free-form-classification"
-        }
-        start_evaluation(results, output_dir=args.output_dir, output_file=evaluated_output_file, eval_type=eval_type_mapping[args.task_type], model_type=args.gpt_type, parallel=True, num_workers=20)
+    # if args.start_eval:
+    #     evaluated_output_file = args.output_file.replace(".json", f"_evaluated_{args.gpt_type}.json")
+    #     eval_type_mapping = {
+    #         "captioning": "object-captioning",
+    #         "classification": "open-free-form-classification"
+    #     }
+    #     start_evaluation(results, output_dir=args.output_dir, output_file=evaluated_output_file, eval_type=eval_type_mapping[args.task_type], model_type=args.gpt_type, parallel=True, num_workers=20)
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()

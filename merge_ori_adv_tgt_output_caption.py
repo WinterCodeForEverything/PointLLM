@@ -2,11 +2,11 @@ import os
 import json
 
 import numpy as np
-import shutil
+#import shutil
 #import random
 
 ori_data_path = '/mnt/ssd/liuchao/PointLLM/Objaverse_npy'
-adv_data_path = '/mnt/ssd/liuchao/PointLLM/Objaverse_adv_npy'
+adv_data_path = '/mnt/ssd/liuchao/PointLLM/Objaverse_adv_npy_0.02'
 ori_output_cap = './result/PointLLM_brief_description_val_200_GT_Objaverse_classification_prompt0.json'
 adv_output_cap = './result/PointLLM_brief_description_adv_200_Objaverse_classification_prompt0.json'
 tgt_output_cap = './result/PointLLM_brief_description_tgt_200_Objaverse_classification_prompt0.json'
@@ -46,14 +46,14 @@ for ori_cap, adv_cap, tgt_cap in zip(list_ori_cap_dict['results'], list_adv_cap_
     os.makedirs(output_pc_path)
     
     # Load the .npy file and save it as a .txt file
-    ori_pc = np.load(os.path.join(ori_data_path, f"{ori_cap['object_id']}_8192.npy"))
-    np.savetxt(os.path.join(output_pc_path, "ori.txt"), ori_pc)
+    # ori_pc = np.load(os.path.join(ori_data_path, f"{ori_cap['object_id']}_8192.npy"))
+    # np.savetxt(os.path.join(output_pc_path, "ori.txt"), ori_pc)
 
     adv_pc = np.load(os.path.join(adv_data_path, f"{adv_cap['object_id']}_8192.npy"))
     np.savetxt(os.path.join(output_pc_path, "adv.txt"), adv_pc)
     
-    tgt_pc = np.load(os.path.join(ori_data_path, f"{tgt_cap['object_id']}_8192.npy"))
-    np.savetxt(os.path.join(output_pc_path, "tgt.txt"), tgt_pc)    
+    # tgt_pc = np.load(os.path.join(ori_data_path, f"{tgt_cap['object_id']}_8192.npy"))
+    # np.savetxt(os.path.join(output_pc_path, "tgt.txt"), tgt_pc)    
     
     # shutil.copy(
     #     os.path.join(ori_data_path, f"{ori_cap['object_id']}_8192.npy"),

@@ -2,6 +2,7 @@
 
 
 # certain hyper-parameters can be modified based on user's preference
+CUDA_VISIBLE_DEVICES=1 \
 python _train_adv_pc_trans.py \
     --model_name 'RunsenXu/PointLLM_7B_v1.2' \
     --data_path '/mnt/ssd/liuchao/PointLLM/Objaverse_npy' \
