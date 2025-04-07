@@ -290,7 +290,7 @@ def main(args):
         adv_pc = torch.clamp(clean_pc+delta, min=-epsilon, max=epsilon)
         adv_pc = ori_pc + delta
         for k, pc_id in enumerate(clean_object_ids):
-            output_adv_pc_path = os.path.join(output_pc_path, pc_id )
+            output_adv_pc_path = os.path.join(output_pc_path, f'{pc_id}_8192' )
             if not os.path.exists(output_adv_pc_path):
                 print(f"No Exixted directory: {output_adv_pc_path}")
                 continue
