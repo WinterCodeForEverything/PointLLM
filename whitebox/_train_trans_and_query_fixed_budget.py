@@ -118,6 +118,7 @@ def main(args):
     epsilon = args.epsilon
     #sigma = args.sigma
     output_pc_path = args.output_pc_path
+    output_showing_pc_path = args.output_showing_pc_path
     #pointnum = args.pointnum
     prompt_index = args.prompt_index
     num_query = args.num_query
@@ -126,6 +127,7 @@ def main(args):
     
     assert num_query % num_sub_query == 0, "num_query should be divisible by num_sub_query"
     
+    output_pc_path = f'{output_pc_path}__epsilon_{epsilon}'
     if not os.path.exists(output_pc_path):
         os.makedirs(output_pc_path)
         
@@ -290,12 +292,17 @@ def main(args):
         adv_pc = torch.clamp(clean_pc+delta, min=-epsilon, max=epsilon)
         adv_pc = ori_pc + delta
         for k, pc_id in enumerate(clean_object_ids):
-            output_adv_pc_path = os.path.join(output_pc_path, f'{pc_id}_8192' )
-            if not os.path.exists(output_adv_pc_path):
-                print(f"No Exixted directory: {output_adv_pc_path}")
+            # save showing point cloud
+            output_showing_pc_file_path = os.path.join(output_showing_pc_path, f'{pc_id}_{args.pointnum}' )
+            if not os.path.exists(output_showing_pc_file_path):
+                print(f"No Exixted directory: {output_showing_pc_file_path}")
                 continue
-            output_adv_pc_file = os.path.join(output_adv_pc_path, f"pp_tt_adv_{epsilon}.txt")
-            np.savetxt(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
+            output_showing_adv_pc_file = os.path.join(output_showing_pc_file_path, f"pp_tt_adv_{epsilon}.txt")
+            np.savetxt(output_showing_adv_pc_file, adv_pc[k].cpu().detach().numpy())
+            
+            # save adversarial point cloud for evaluation
+            output_adv_pc_file = os.path.join(output_pc_path, f"{pc_id}_{args.pointnum}.npy")
+            np.save(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
 
     
     
@@ -326,6 +333,7 @@ if __name__ == '__main__':
     parser.add_argument("--pointnum", type=int, default=8192)
     parser.add_argument("--use_color",  action="store_true", default=False)
     parser.add_argument("--output_pc_path", type=str, default="data/adv_pc")
+    parser.add_argument("--output_showing_pc_path", type=str, default="data/adv_pc")
 
     # * data loader, batch_size, shuffle, num_workers
     parser.add_argument("--num_samples", type=int, default=100)
