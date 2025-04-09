@@ -144,14 +144,14 @@ def main(args):
             chamfer_dist = chamfer_distance(adv_pc, tgt_pc).mean()
             #print( f"chamfer_dist: {chamfer_dist.mean().item()}")
             
-            final_objective = embedding_sim +  gamma1 * chamfer_dist
+            final_objective = embedding_sim - gamma1 * chamfer_dist
             final_objective.backward()
             
             grad = delta.grad.detach()
             if torch.isnan(grad).any():
                 print(f"NaN detected in gradient. Skip this sample.")
                 continue
-            d = delta + alpha * torch.sign(grad)        #torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
+            d = torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
             delta.data = d * mask
             delta.grad.zero_()
 
@@ -163,7 +163,7 @@ def main(args):
                     f"max_delta_{i}": torch.max(torch.abs(d)).item(),
                     f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
                 })
-            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, chamfer distance = {chamfer_distance.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
+            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, chamfer distance = {chamfer_dist.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
     
         # save adversarial point cloud
         adv_pc = ori_pc + delta
