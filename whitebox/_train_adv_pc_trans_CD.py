@@ -64,6 +64,30 @@ def pc_norm(pc):
     pc[:, :, :3] = normalized_coords  # Replace the first 3 dimensions with normalized values
     return pc
 
+def chamfer_distance(pc1, pc2):
+    """
+    Compute the Chamfer Distance between two point clouds.
+    Args:
+        pc1: torch.Tensor of shape (B, N, 6), where B is batch size, N is number of points.
+        pc2: torch.Tensor of shape (B, N, 6), where B is batch size, N is number of points.
+    Returns:
+        torch.Tensor of shape (B,) representing the Chamfer Distance for each batch.
+    """
+    coords1 = pc1[:, :, :3]  # Extract the first 3 dimensions (coordinates)
+    coords2 = pc2[:, :, :3]  # Extract the first 3 dimensions (coordinates)
+
+    # Compute pairwise distances
+    dist1 = torch.cdist(coords1, coords2, p=2)  # Shape: (B, N, N)
+    dist2 = torch.cdist(coords2, coords1, p=2)  # Shape: (B, N, N)
+
+    # Compute the minimum distances
+    min_dist1 = dist1.min(dim=2).values  # Shape: (B, N)
+    min_dist2 = dist2.min(dim=2).values  # Shape: (B, N)
+
+    # Compute the Chamfer Distance
+    chamfer_dist = (min_dist1.mean(dim=1) + min_dist2.mean(dim=1))  # Shape: (B,)
+
+    return chamfer_dist
     
 def main(args):
     
@@ -72,6 +96,7 @@ def main(args):
     epsilon = args.epsilon
     output_pc_path = args.output_pc_path
     pointnum = args.pointnum
+    gamma1 = args.gamma1
     
     if not os.path.exists(output_pc_path):
         os.makedirs(output_pc_path)
@@ -106,7 +131,7 @@ def main(args):
         mask = torch.ones_like(ori_pc, dtype=torch.bool)
         mask[..., 3:] = 0
         for j in range(args.steps):
-            adv_pc = pc_norm(ori_pc + delta)
+            adv_pc = ori_pc + delta
             adv_feature = pc_encoder(adv_pc.to(torch.bfloat16))
             if torch.isnan(adv_feature).any():
                 print(f"NaN detected in adv_feature. Skip this sample.")
@@ -114,13 +139,19 @@ def main(args):
             adv_feature = adv_feature / adv_feature.norm(dim=2, keepdim=True)
             
             embedding_sim = torch.mean(torch.sum(adv_feature * tgt_feature, dim=2))  # computed from normalized features (therefore it is cos sim.)
-            embedding_sim.backward()
+            #embedding_sim.backward()
+            
+            chamfer_dist = chamfer_distance(adv_pc, tgt_pc).mean()
+            #print( f"chamfer_dist: {chamfer_dist.mean().item()}")
+            
+            final_objective = embedding_sim +  gamma1 * chamfer_dist
+            final_objective.backward()
             
             grad = delta.grad.detach()
             if torch.isnan(grad).any():
                 print(f"NaN detected in gradient. Skip this sample.")
                 continue
-            d = torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
+            d = delta + alpha * torch.sign(grad)        #torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
             delta.data = d * mask
             delta.grad.zero_()
 
@@ -128,13 +159,14 @@ def main(args):
             if args.wandb:
                 wandb.log({
                     f"embedding_similarity_{i}": embedding_sim.item(),
+                    f"chamfer_distance_{i}": chamfer_dist.item(),
                     f"max_delta_{i}": torch.max(torch.abs(d)).item(),
                     f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
                 })
-            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
+            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, chamfer distance = {chamfer_distance.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
     
         # save adversarial point cloud
-        adv_pc = pc_norm(ori_pc + delta)
+        adv_pc = ori_pc + delta
         for k, pc_id in enumerate(tgt_pc_id):
             output_adv_pc_file = os.path.join(output_pc_path, f"{pc_id}_{pointnum}.npy")
             np.save(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
@@ -151,6 +183,7 @@ if __name__ == '__main__':
     
     parser.add_argument("--alpha", type=float, default=0.01)
     parser.add_argument("--epsilon", type=float, default=1.0)
+    parser.add_argument("--gamma1", type=float, default=1.0)
     parser.add_argument("--steps", type=int, default=300)
 
     # data 

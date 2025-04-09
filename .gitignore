@@ -11,3 +11,4 @@ modelnet40_data
 *.ipynb
 serving_workdirs
 result
+copy_pc.py
