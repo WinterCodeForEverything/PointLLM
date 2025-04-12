@@ -6,6 +6,7 @@ import torch
 import copy
 import transformers
 from torch.utils.data import Dataset
+import open3d as o3d
 
 from .utils import *
 
@@ -69,6 +70,7 @@ class ObjectPointCloudDataset(Dataset):
                  split='train',
                  conversation_types=None, # * default is simple_des, used for stage1 pre-train
                  use_color=True,
+                 use_normal=True,
                  data_args=None):
 
         """
@@ -92,6 +94,7 @@ class ObjectPointCloudDataset(Dataset):
         self.data_args = data_args
         self.normalize_pc = True
         self.use_color = use_color
+        self.use_normal = use_normal
 
         self.pointnum = pointnum
         self.point_backbone_config = data_args.point_backbone_config if data_args is not None else None
@@ -141,12 +144,37 @@ class ObjectPointCloudDataset(Dataset):
         if type == 'objaverse':
             return self._load_objaverse_point_cloud(object_id) 
 
+    # def compute_pc_normals(self, point_cloud):
+    #     """
+    #     Compute normals for a point cloud.
+    #     Args:
+    #         point_cloud (np.ndarray): Input point cloud of shape (N, 3).
+    #     Returns:
+    #         np.ndarray: Normals of shape (N, 3).
+    #     """
+    #     # Create Open3D point cloud object
+    #     o3d_pc = o3d.geometry.PointCloud()
+    #     o3d_pc.points = o3d.utility.Vector3dVector(point_cloud)
+
+    #     # Estimate normals
+    #     o3d_pc.estimate_normals(search_param=o3d.geometry.KDTreeSearchParamHybrid(radius=0.1, max_nn=30))
+
+    #     # Return normals as a numpy array
+    #     normals = np.asarray(o3d_pc.normals)
+    #     return normals
+    
     def _load_objaverse_point_cloud(self, object_id):
         filename = f"{object_id}_{self.pointnum}.npy"
         point_cloud = np.load(os.path.join(self.data_path, filename))
+            
+        if not self.use_normal:
+            point_cloud = point_cloud[:, :6]
 
-        if not self.use_color:
-            point_cloud = point_cloud[:, :3]
+            if not self.use_color:
+                point_cloud = point_cloud[:, :3]
+        else:
+            if not self.use_color:
+                point_cloud = np.concatenate( (point_cloud[:, :3], point_cloud[:, 6:9] ), axis=1 )
 
         return point_cloud
 
