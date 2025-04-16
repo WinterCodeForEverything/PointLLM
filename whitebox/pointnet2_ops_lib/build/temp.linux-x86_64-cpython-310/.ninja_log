@@ -1,0 +1,10 @@
+# ninja log v5
+1	14029	1744714679487734266	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/group_points.o	19400232c0cfa0e6
+0	14040	1744714679499734556	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/ball_query.o	d58cb4e11fb4cda8
+2	14056	1744714679515734943	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/sampling.o	720583f76926c0ad
+1	14330	1744714679791741614	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/bindings.o	aa9ebad59126af0f
+1	14386	1744714679847742968	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/interpolate.o	9b00fb355ef87f65
+0	40790	1744714706240380400	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/ball_query_gpu.o	ca4c4547ee070c3f
+1	40885	1744714706332382619	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/group_points_gpu.o	f68dc028c89b5183
+1	41100	1744714706544387737	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/interpolate_gpu.o	4e7d83541b5811e1
+2	42379	1744714707820418530	/home/liuchao/PointLLM/whitebox/pointnet2_ops_lib/build/temp.linux-x86_64-cpython-310/pointnet2_ops/_ext-src/src/sampling_gpu.o	3015ecf9e7ac9561

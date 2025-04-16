@@ -1,12 +1,14 @@
 import argparse
 import json
 import os
-from utils import OpenAIGPT
+from .utils import OpenAIGPT
 from tqdm import tqdm
 from multiprocessing import Pool
 import random
 random.seed(0)
 import re
+
+import openai
 
 gpt4_open_free_from_cls_prompt = """Analyze two sentences and determine if they're referring to the same general object or concept, focusing on the type of object, not attributes such as color, size, or shape. Respond with 'T' if they refer to the same thing and 'F' if not. Also, provide a brief rationale (no more than 20 words) for your judgment.
 Example:
@@ -58,22 +60,14 @@ gpt4_close_set_cls_prompt = chatgpt_close_set_cls_prompt
 
 GPT_PRICES = {
     # * check https://openai.com/pricing for updated price
-    "gpt-3.5-turbo-0613": {
-        "price_1k_prompt_tokens": 0.0015,
-        "price_1k_completion_tokens": 0.002
+    "gpt-4o-mini": {
+        "price_1m_prompt_tokens": 0.3,
+        "price_1m_completion_tokens": 1.2
     },
-    "gpt-3.5-turbo-1106": {
-        "price_1k_prompt_tokens": 0.0010,
-        "price_1k_completion_tokens": 0.002
+    "gpt-4.1-mini": {
+        "price_1m_prompt_tokens": 0.4,
+        "price_1m_completion_tokens": 1.6
     },
-    "gpt-4-0613":{
-        "price_1k_prompt_tokens": 0.03,
-        "price_1k_completion_tokens": 0.06  
-    },
-    "gpt-4-1106-preview":{
-        "price_1k_prompt_tokens": 0.01,
-        "price_1k_completion_tokens": 0.03
-    }
 }
 
 class OpenAIOpenFreeFormClsEvaluator():
@@ -112,8 +106,8 @@ class OpenAIOpenFreeFormClsEvaluator():
         }
 
         # * price
-        self.price_1k_prompt_tokens = GPT_PRICES[model_type]["price_1k_prompt_tokens"]
-        self.price_1k_completion_tokens = GPT_PRICES[model_type]["price_1k_completion_tokens"]
+        self.price_1m_prompt_tokens = GPT_PRICES[model_type]["price_1m_prompt_tokens"]
+        self.price_1m_completion_tokens = GPT_PRICES[model_type]["price_1m_completion_tokens"]
 
         print(f"OpenAIGPT config: ")
         print(self.default_chat_parameters)
@@ -182,12 +176,19 @@ class OpenAIOpenFreeFormClsEvaluator():
         model_output = result['model_output']
         messages = [{"role": "user", "content": self.gpt_prompt.format(ground_truth=ground_truth, model_output=model_output)}]
 
-        gpt_response = self.openaigpt.safe_chat_complete(messages, content_only=False) 
+        try:
+            gpt_response = self.openaigpt.safe_chat_complete(messages, content_only=False)   
+        except openai.RateLimitError:
+        # handle rate limit error
+            print(f"GPT response: {gpt_response}")
+        
 
         prompt_tokens = gpt_response['usage']['prompt_tokens']
         completion_tokens = gpt_response['usage']['completion_tokens']
 
         gpt_response = gpt_response['choices'][0]["message"]['content']
+        
+        #print(f"GPT response: {gpt_response}")
 
 
         accuracy, cls_result, reason = self.parse_gpt_response_evaluate(gpt_response) # return 0, "INVALID", gpt_response if not valid
@@ -313,11 +314,11 @@ class OpenAIOpenFreeFormClsEvaluator():
         self.print_costs()
     
     def print_costs(self):
-        print(f"Prompt Tokens Price: {self.prompt_tokens * self.price_1k_prompt_tokens / 1000:.2f} USD")
-        print(f"Completion Tokens Price: {self.completion_tokens * self.price_1k_completion_tokens / 1000:.2f} USD")
+        print(f"Prompt Tokens Price: {self.prompt_tokens * self.price_1m_prompt_tokens / 1000000:.2f} USD")
+        print(f"Completion Tokens Price: {self.completion_tokens * self.price_1m_completion_tokens / 1000000:.2f} USD")
     
     def get_costs(self):
-        return self.prompt_tokens * self.price_1k_prompt_tokens / 1000 + self.completion_tokens * self.price_1k_completion_tokens / 1000
+        return self.prompt_tokens * self.price_1m_prompt_tokens / 1000 + self.completion_tokens * self.price_1m_completion_tokens / 1000000
 
 
 class OpenAICloseSetClsEvaluator(OpenAIOpenFreeFormClsEvaluator):

@@ -151,8 +151,8 @@ class HiT_ADV:
         hide_weight = np.ones((B,)) * self.hide_weight
 
         # record best results in binary search
-        o_bestdist = np.array([1e10] * B)
-        o_bestscore = np.array([-1.0] * B)
+        o_bestdist = np.array([1.0] * B)
+        o_bestscore = np.array([0.0] * B)
         o_bestattack = np.zeros((B, 3, K))
         o_best_pertmat = np.zeros((B, self.central_num, 3))
         o_best_gaussdelta = np.zeros((B, self.central_num))
@@ -178,8 +178,8 @@ class HiT_ADV:
             perturb_mat.requires_grad_()
             gauss_delta.requires_grad_()
 
-            bestdist = np.array([1e10] * B)
-            bestscore = np.array([-1.0] * B)
+            bestdist = np.array([1.0] * B)
+            bestscore = np.array([0.0] * B)
             # 5 3
             opt = optim.Adam([
                 {'params': perturb_mat, 'lr': self.attack_lr * 5},
@@ -242,6 +242,7 @@ class HiT_ADV:
                 
                 dist_loss = torch.tensor(0.).cuda()
                 dist_val = self.transformation_loss(tmp_adv_data, perturb_mat, gauss_delta, batch_avg=False)
+                dist_val = dist_val.detach().cpu().numpy()
 
                 #pred_val = pred.detach().cpu().numpy()  # [B]
                 feat_sim_val = feat_simility.detach().to(torch.float32).cpu().numpy()  # [B]
@@ -255,11 +256,11 @@ class HiT_ADV:
                 for e, (dist, fs, ii, pert, gd) in \
                         enumerate(zip(dist_val, feat_sim_val, input_val, perturb_mat_val, gauss_delta_val)):
                     # tar*
-                    if dist < bestdist[e] and fs > bestscore[e]:               #and pred != label:
+                    if  dist < bestdist[e] and fs > self.success_threshold:         #and pred != label:
                         bestdist[e] = dist
                         bestscore[e] = fs
                     # tar*
-                    if dist < o_bestdist[e] and fs > o_bestscore[e]:
+                    if dist < o_bestdist[e] and fs > self.success_threshold:    
                         # print('pert', pert, 'gauss_delta', gd)
                         o_bestdist[e] = dist
                         o_bestscore[e] = fs
@@ -352,8 +353,9 @@ class HiT_ADV:
         # return final results
         success_num = (o_bestscore >= self.success_threshold).sum()
         print('Successfully attack {}/{}'.format(success_num, B))
-
-        return o_bestattack.transpose((0, 2, 1)), success_num
+        
+        o_adv_pc = np.concatenate((o_bestattack.transpose((0, 2, 1)), ori_pc[..., 3:].float().cpu().numpy(), ), axis=-1)  # [B, K, 6]
+        return o_adv_pc, success_num
 
     def chamfer_distance(self, points1, points2):
         dist1 = torch.cdist(points1, points2, p=2)  # [npoint, nsample]

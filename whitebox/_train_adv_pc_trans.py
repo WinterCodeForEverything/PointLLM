@@ -16,6 +16,11 @@ import os
 import json
 import wandb
 
+from pointllm.eval.evaluator import start_evaluation
+
+from whitebox.evaluation.pc_evaluator.pc_evaluator import PointCloudEvaluator
+
+device = "cuda" if torch.cuda.is_available() else "cpu"
 
 def init_pc_encoder(args):
     # Model
@@ -64,13 +69,14 @@ def pc_norm(pc):
     pc[:, :, :3] = normalized_coords  # Replace the first 3 dimensions with normalized values
     return pc
 
-    
 def main(args):
     
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    alpha = args.alpha
-    epsilon = args.epsilon
+    coord_lr = args.coord_lr
+    color_lr = args.color_lr
+    coord_budget = args.coord_budget
+    color_budget = args.color_budget
     output_pc_path = args.output_pc_path
+    output_visual_pc_path = args.output_visual_pc_path
     pointnum = args.pointnum
     
     if not os.path.exists(output_pc_path):
@@ -91,8 +97,8 @@ def main(args):
     
     
     for i, (ori_data_dict, tgt_data_dict) in enumerate(zip(ori_dataloader, tgt_dataloader)):
-        _, ori_pc = ori_data_dict['object_ids'], ori_data_dict['point_clouds']
-        tgt_pc_id, tgt_pc = tgt_data_dict['object_ids'], tgt_data_dict['point_clouds']
+        ori_pc_ids, ori_pc = ori_data_dict['object_ids'], ori_data_dict['point_clouds']
+        tgt_pc_ids, tgt_pc = tgt_data_dict['object_ids'], tgt_data_dict['point_clouds']
         ori_pc = ori_pc.to(device)
         tgt_pc = tgt_pc.to(device)
         with torch.no_grad():
@@ -103,8 +109,8 @@ def main(args):
             tgt_feature = tgt_feature / tgt_feature.norm(dim=2, keepdim=True)
             
         delta = torch.zeros_like(ori_pc, requires_grad=True)
-        mask = torch.ones_like(ori_pc, dtype=torch.bool)
-        mask[..., 3:] = 0
+        # mask = torch.ones_like(ori_pc, dtype=torch.bool)
+        # mask[..., 3:] = 0
         for j in range(args.steps):
             adv_pc = pc_norm(ori_pc + delta)
             adv_feature = pc_encoder(adv_pc.to(torch.bfloat16))
@@ -120,25 +126,39 @@ def main(args):
             if torch.isnan(grad).any():
                 print(f"NaN detected in gradient. Skip this sample.")
                 continue
-            d = torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
-            delta.data = d * mask
+            
+            d = torch.zeros_like(delta, requires_grad=False)
+            d[..., :3] = torch.clamp(delta[..., :3] + coord_lr * torch.sign(grad[..., :3]), min=-coord_budget, max=coord_budget)
+            d[..., 3:] = torch.clamp(delta[..., 3:] + color_lr * torch.sign(grad[..., 3:]), min=-color_budget, max=color_budget)
+            delta.data = d
             delta.grad.zero_()
 
             # Log metrics to wandb
             if args.wandb:
                 wandb.log({
-                    f"embedding_similarity_{i}": embedding_sim.item(),
-                    f"max_delta_{i}": torch.max(torch.abs(d)).item(),
-                    f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
+                    f"embedding_similarity": embedding_sim.item(),
+                    f"max_coord_delta": torch.max(torch.abs(d[..., :3])).item(),
+                    f"mean_coord_delta": torch.mean(torch.abs(d[..., :3])).item(),
+                    f"max_color_delta": torch.max(torch.abs(d[..., 3:])).item(),
+                    f"mean_color_delta": torch.mean(torch.abs(d[..., 3:])).item(),
                 })
-            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
+            print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, \
+                  embedding similarity={embedding_sim.item():.5f}, \
+                  max coord delta={torch.max(torch.abs(d[..., :3])).item():.3f},   \
+                  mean coord delta={torch.mean(torch.abs(d[..., :3])).item():.3f}, \
+                  max color delta={torch.max(torch.abs(d[..., 3:])).item():.3f},   \
+                  mean color delta={torch.mean(torch.abs(d[..., 3:])).item():.3f}"
+                  )
     
         # save adversarial point cloud
         adv_pc = pc_norm(ori_pc + delta)
-        for k, pc_id in enumerate(tgt_pc_id):
-            output_adv_pc_file = os.path.join(output_pc_path, f"{pc_id}_{pointnum}.npy")
-            np.save(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
-            #print(f"Saved adversarial point cloud to {output_adv_pc_file}")
+        for b, (ori_pc_id, tgt_pc_id) in enumerate( zip(ori_pc_ids, tgt_pc_ids) ):
+            output_adv_pc_file = os.path.join(output_pc_path, f"{tgt_pc_id}_{pointnum}.npy")
+            np.save(output_adv_pc_file, adv_pc[b].cpu().detach().numpy())
+            output_visual_pc_file = os.path.join(output_visual_pc_path, f"{ori_pc_id}_{pointnum}", f'adv_coord_{coord_budget}_color_{coord_budget}.txt')
+            np.savetxt(output_visual_pc_file, adv_pc[b].cpu().detach().numpy() )
+            print(f"Saved visualized adversarial point cloud to {output_visual_pc_file}")
+            
         
 
 if __name__ == '__main__':
@@ -149,8 +169,10 @@ if __name__ == '__main__':
     parser.add_argument("--model_name", type=str, \
         default="RunsenXu/PointLLM_7B_v1.2") 
     
-    parser.add_argument("--alpha", type=float, default=0.01)
-    parser.add_argument("--epsilon", type=float, default=1.0)
+    parser.add_argument("--coord_lr", type=float, default=0.001)
+    parser.add_argument("--color_lr", type=float, default=0.01)
+    parser.add_argument("--coord_budget", type=float, default=1.0)
+    parser.add_argument("--color_budget", type=float, default=1.0)
     parser.add_argument("--steps", type=int, default=300)
 
     # data 
@@ -160,6 +182,7 @@ if __name__ == '__main__':
     parser.add_argument("--pointnum", type=int, default=8192)
     parser.add_argument("--use_color",  action="store_true", default=False)
     parser.add_argument("--output_pc_path", type=str, default="data/adv_pc")
+    parser.add_argument("--output_visual_pc_path", type=str, default="data/adv_pc")
     
 
     # * data loader, batch_size, shuffle, num_workers
@@ -172,6 +195,7 @@ if __name__ == '__main__':
     parser.add_argument("--wandb", action="store_true", default=False)
     parser.add_argument("--wandb_project_name", type=str, default='temp_proj')
     parser.add_argument("--wandb_run_name", type=str, default='temp_run')
+    
 
     args = parser.parse_args()
 

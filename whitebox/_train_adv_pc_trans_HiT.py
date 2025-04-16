@@ -4,10 +4,8 @@ import numpy as np
 import torch
 from torch.utils.data import DataLoader
 import os
-#from pointllm.conversation import conv_templates, SeparatorStyle
 from pointllm.utils import disable_torch_init
 from pointllm.model import *
-#from pointllm.model.utils import KeywordsStoppingCriteria
 from pointllm.data import ObjectPointCloudDataset
 from tqdm import tqdm
 from transformers import AutoTokenizer
@@ -17,6 +15,7 @@ import json
 import wandb
 from whitebox.ShapeAttack.HiT_ADV import HiT_ADV
 #from whitebox.util.adv_utils import LogitsAdvLoss, CrossEntropyAdvLoss, UntargetedLogitsAdvLoss
+
 
 
 device = "cuda" if torch.cuda.is_available() else "cpu"
@@ -30,7 +29,7 @@ def init_pc_encoder(args):
     print(f'[INFO] Model name: {os.path.basename(model_name)}')
 
     tokenizer = AutoTokenizer.from_pretrained(model_name)
-    model = PointLLMLlamaForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=False, use_cache=True, torch_dtype=torch.bfloat16)
+    model = PointLLMLlamaForCausalLM.from_pretrained(model_name, low_cpu_mem_usage=False, use_cache=True, torch_dtype=torch.bfloat16).to(device)
     model.initialize_tokenizer_point_backbone_config_wo_embedding(tokenizer)
     
     pc_encoder = model.get_pc_encoder()
@@ -54,45 +53,7 @@ def get_dataloader(dataset, batch_size, shuffle=False, num_workers=4):
     dataloader = DataLoader(dataset, batch_size=batch_size, shuffle=shuffle, num_workers=num_workers)
     return dataloader
 
-def pc_norm(pc):
-    """Normalize the first 3 dimensions of the point cloud to range [0, 1].
-    Args:
-        pc: torch.Tensor of shape (B, N, 6), where B is batch size, N is number of points.
-    Returns:
-        torch.Tensor of shape (B, N, 6) with the first 3 dimensions normalized to range [0, 1].
-    """
-    coords = pc[:, :, :3]  # Extract the first 3 dimensions
-    min_coords = coords.min(dim=1, keepdim=True).values  # (B, 1, 3)
-    max_coords = coords.max(dim=1, keepdim=True).values  # (B, 1, 3)
-    normalized_coords = (coords - min_coords) / (max_coords - min_coords + 1e-8)  # Avoid division by zero
-    pc[:, :, :3] = normalized_coords  # Replace the first 3 dimensions with normalized values
-    return pc
 
-# def chamfer_distance(pc1, pc2):
-#     """
-#     Compute the Chamfer Distance between two point clouds.
-#     Args:
-#         pc1: torch.Tensor of shape (B, N, 6), where B is batch size, N is number of points.
-#         pc2: torch.Tensor of shape (B, N, 6), where B is batch size, N is number of points.
-#     Returns:
-#         torch.Tensor of shape (B,) representing the Chamfer Distance for each batch.
-#     """
-#     coords1 = pc1[:, :, :3]  # Extract the first 3 dimensions (coordinates)
-#     coords2 = pc2[:, :, :3]  # Extract the first 3 dimensions (coordinates)
-
-#     # Compute pairwise distances
-#     dist1 = torch.cdist(coords1, coords2, p=2)  # Shape: (B, N, N)
-#     dist2 = torch.cdist(coords2, coords1, p=2)  # Shape: (B, N, N)
-
-#     # Compute the minimum distances
-#     min_dist1 = dist1.min(dim=2).values  # Shape: (B, N)
-#     min_dist2 = dist2.min(dim=2).values  # Shape: (B, N)
-
-#     # Compute the Chamfer Distance
-#     chamfer_dist = (min_dist1.mean(dim=1) + min_dist2.mean(dim=1))  # Shape: (B,)
-
-#     return chamfer_dist
-   
 class FeatureSimilarityLoss(torch.nn.Module):
     def __init__(self, model):
         super(FeatureSimilarityLoss, self).__init__()
@@ -114,43 +75,16 @@ class FeatureSimilarityLoss(torch.nn.Module):
         embedding_sim = torch.mean(torch.sum(adv_feature * tgt_feature, dim=2), dim=1)
         
         return embedding_sim
-         
-# def adv_loss( adv_pc, tgt_pc, pc_encoder):
-#     """
-#     Compute the adversarial loss for the point cloud.
-#     Args:
-#         adv_pc: torch.Tensor of shape (B, N, 6), where B is batch
-#             size, N is number of points.
-#         tgt_pc: torch.Tensor of shape (B, N, 6), where B is batch
-#             size, N is number of points.
-#         pc_encoder: Point cloud encoder model.
-#     Returns:
-#         torch.Tensor representing the adversarial loss.
-#     """
-#     # Compute the embedding similarity
-#     adv_feature = pc_encoder(adv_pc)
-#     tgt_feature = pc_encoder(tgt_pc)
-    
-#     # Normalize the features
-#     adv_feature = adv_feature / adv_feature.norm(dim=2, keepdim=True)
-#     tgt_feature = tgt_feature / tgt_feature.norm(dim=2, keepdim=True)
-    
-#     # Compute the embedding similarity
-#     embedding_sim = torch.mean(torch.sum(adv_feature * tgt_feature, dim=2))  # computed from normalized features (therefore it is cos sim.)
-    
-#     return embedding_sim
+
 
 def main(args):
     
-
-    # alpha = args.alpha
-    # epsilon = args.epsilon
-    #output_pc_path = args.output_pc_path
-    #pointnum = args.pointnum
-    # gamma1 = args.gamma1
+    output_pc_path = args.output_pc_path
+    output_visual_pc_path = args.output_visual_pc_path
+    pointnum = args.pointnum
     
-    # if not os.path.exists(output_pc_path):
-    #     os.makedirs(output_pc_path)
+    if not os.path.exists(output_pc_path):
+        os.makedirs(output_pc_path)
         
     if args.wandb:
         run = wandb.init(project=args.wandb_project_name, 
@@ -162,8 +96,10 @@ def main(args):
     ori_dataloader = get_dataloader(ori_dataset, args.batch_size, args.shuffle, args.num_workers)
     tgt_dataloader = get_dataloader(tgt_dataset, args.batch_size, args.shuffle, args.num_workers)
     
-    pc_encoder = init_pc_encoder(args).to(device)
-    #model.eval()
+    # model, tokenizer, conv  = init_model(args.model_name)
+    # model.eval()
+    # pc_encoder = model.get_pc_encoder()
+    pc_encoder = init_pc_encoder(args)
     
     #adv_func = CrossEntropyAdvLoss()
     #CW_adv_func = UntargetedLogitsAdvLoss(kappa=args.kappa)
@@ -178,10 +114,55 @@ def main(args):
                                budget=args.budget, success_threshold = args.success_threshold,
                                use_wandb = args.wandb )
     
+    # # prepere for evaluation
+    # batch_size = args.batch_size
+    # point_backbone_config = model.get_model().point_backbone_config
+    # point_token_len = point_backbone_config['point_token_len']
+    # default_point_patch_token = point_backbone_config['default_point_patch_token']
+    # default_point_start_token = point_backbone_config['default_point_start_token']
+    # default_point_end_token = point_backbone_config['default_point_end_token']
+    # mm_use_point_start_end = point_backbone_config['mm_use_point_start_end']
     
+    # if mm_use_point_start_end:
+    #     default_point_prompt = default_point_start_token + default_point_patch_token * point_token_len + default_point_end_token + '\n'
+    # else:
+    #     default_point_prompt = default_point_patch_token * point_token_len + '\n'
+    
+    
+    # stop_str = conv.sep if conv.sep_style != SeparatorStyle.TWO else conv.sep2
+    # qs = default_point_prompt + PROMPT_LISTS[args.prompt_index]
+    
+    # conv.append_message(conv.roles[0], qs)
+    # conv.append_message(conv.roles[1], None)
+
+    # prompt = conv.get_prompt()
+    # inputs = tokenizer([prompt])
+    # prefix_input_ids = torch.as_tensor( inputs.input_ids ).to(device) # * tensor of 1, L
+    # stopping_criteria = KeywordsStoppingCriteria([stop_str], tokenizer, prefix_input_ids)
+    # prefix_input_ids = prefix_input_ids.repeat(batch_size, 1)
+    
+    
+    
+    # gptEvaluator = GPTEvaluator( args.gpt_type )
+    # traditianalEvaluator = TraditionalMetricEvaluator()
+    # evaluate_results = []
+    
+    # all_scores = {
+    #     'bleu-1': [],
+    #     'bleu-2': [],
+    #     'bleu-3': [],
+    #     'bleu-4': [],
+    #     'rouge-1': [],
+    #     'rouge-2': [],
+    #     'rouge-l': [],
+    #     'meteor': [],
+    #     'simcse_similarity': [],
+    #     'gpt_score': [],
+    #     'success_aa': [],
+    # }
     for i, (ori_data_dict, tgt_data_dict) in enumerate(zip(ori_dataloader, tgt_dataloader)):
-        _, ori_pc = ori_data_dict['object_ids'], ori_data_dict['point_clouds']
-        tgt_pc_id, tgt_pc = tgt_data_dict['object_ids'], tgt_data_dict['point_clouds']
+        ori_pc_ids, ori_pc = ori_data_dict['object_ids'], ori_data_dict['point_clouds']
+        tgt_pc_ids, tgt_pc = tgt_data_dict['object_ids'], tgt_data_dict['point_clouds']
         ori_pc = ori_pc.to(device)
         tgt_pc = tgt_pc.to(device)
         with torch.no_grad():
@@ -191,54 +172,67 @@ def main(args):
                 continue
             tgt_feature = tgt_feature / tgt_feature.norm(dim=2, keepdim=True)
             
-        results = HiT_attacker.attack(ori_pc, tgt_feature)
-            
-        # delta = torch.zeros_like(ori_pc, requires_grad=True)
-        # mask = torch.ones_like(ori_pc, dtype=torch.bool)
-        # mask[..., 3:] = 0
-        # for j in range(args.steps):
-        #     adv_pc = ori_pc + delta
-        #     adv_feature = pc_encoder(adv_pc.to(torch.bfloat16))
-        #     if torch.isnan(adv_feature).any():
-        #         print(f"NaN detected in adv_feature. Skip this sample.")
-        #         continue
-        #     adv_feature = adv_feature / adv_feature.norm(dim=2, keepdim=True)
-            
-        #     embedding_sim = torch.mean(torch.sum(adv_feature * tgt_feature, dim=2))  # computed from normalized features (therefore it is cos sim.)
-        #     #embedding_sim.backward()
-            
-        #     #chamfer_dist = chamfer_distance(adv_pc, tgt_pc).mean()
-        #     #print( f"chamfer_dist: {chamfer_dist.mean().item()}")
-            
-        #     #final_objective = embedding_sim - gamma1 * chamfer_dist
-        #     #final_objective.backward()
-            
-        #     grad = delta.grad.detach()
-        #     if torch.isnan(grad).any():
-        #         print(f"NaN detected in gradient. Skip this sample.")
-        #         continue
-        #     d = torch.clamp(delta + alpha * torch.sign(grad), min=-epsilon, max=epsilon)
-        #     delta.data = d * mask
-        #     delta.grad.zero_()
-
-        #     # Log metrics to wandb
-        #     if args.wandb:
-        #         wandb.log({
-        #             f"embedding_similarity_{i}": embedding_sim.item(),
-        #             #f"chamfer_distance_{i}": chamfer_dist.item(),
-        #             f"max_delta_{i}": torch.max(torch.abs(d)).item(),
-        #             f"mean_delta_{i}": torch.mean(torch.abs(d)).item()
-        #         })
-        #     print(f"iter {i}/{args.num_samples//args.batch_size} step:{j:3d}, embedding similarity={embedding_sim.item():.5f}, max delta={torch.max(torch.abs(d)).item():.3f}, mean delta={torch.mean(torch.abs(d)).item():.3f}")
-        #     #chamfer distance = {chamfer_dist.item():.5f},
-            
-        # # save adversarial point cloud
-        # adv_pc = ori_pc + delta
-        # for k, pc_id in enumerate(tgt_pc_id):
-        #     output_adv_pc_file = os.path.join(output_pc_path, f"{pc_id}_{pointnum}.npy")
-        #     np.save(output_adv_pc_file, adv_pc[k].cpu().detach().numpy())
-        #     #print(f"Saved adversarial point cloud to {output_adv_pc_file}")
+        adv_pc, _ = HiT_attacker.attack(ori_pc, tgt_feature)
+        #adv_pc = torch.from_numpy(adv_pc).to(device)
         
+        # save adversarial point cloud
+        for b, (ori_pc_id, tgt_pc_id) in enumerate( zip(ori_pc_ids, tgt_pc_ids) ):
+            output_adv_pc_file = os.path.join(output_pc_path, f"{tgt_pc_id}_{pointnum}.npy")
+            np.save(output_adv_pc_file, adv_pc[b] )
+            output_visual_pc_file = os.path.join(output_visual_pc_path, f"{ori_pc_id}_{pointnum}", f'adv_HiT_{args.success_threshold}.txt')
+            np.savetxt(output_visual_pc_file, adv_pc[b] )
+            print(f"Saved visualized adversarial point cloud to {output_visual_pc_file}")
+        
+    #     #start evalution
+    #     adv_captions = generate_outputs(model, tokenizer, prefix_input_ids, adv_pc, stopping_criteria)
+    #     tgt_captions = generate_outputs(model, tokenizer, prefix_input_ids, tgt_pc, stopping_criteria)
+    #     for b, (ori_pc_id, tgt_pc_id) in enumerate(zip(ori_pc_ids, tgt_pc_ids) ):
+    #         adv_caption = adv_captions[b]
+    #         tgt_caption = tgt_captions[b]
+    #         gpt_result = gptEvaluator.evaluate(adv_caption, tgt_caption)
+    #         traditianal_result = traditianalEvaluator.evaluate( adv_caption, tgt_caption )
+            
+            
+    #         evaluate_result ={
+    #             'ori_pc_id': ori_pc_id,
+    #             'tgt_pc_id': tgt_pc_id,
+    #             'adv_caption': adv_caption,
+    #             'tgt_caption': tgt_caption,
+    #             'gpt_result': gpt_result,
+    #             'traditianal_result': traditianal_result,
+    #         }
+    #         evaluate_results.append(evaluate_result)
+    #         print(evaluate_result)
+            
+    #         for metric, score in traditianal_result.items():
+    #             all_scores[metric].append(score)
+    #         all_scores['gpt_score'].append(gpt_result['gpt_score'])
+    #         all_scores['success_aa'].append( gpt_result['gpt_score'] >= 50 )
+
+    # avg_scores =  {}
+    # for metric, scores in avg_scores.items():    
+    #     avg_scores[metric] = np.mean(scores)
+        
+
+        
+    # # print average scores
+    # print('-' * 80)
+    # print("Results:")
+    # for metric, score in avg_scores.items():
+    #     print(f"Average {metric.upper()} Score: {score:.4f}")
+        
+    # # save the evaluation results
+    # save_results ={
+    #     'prompt': PROMPT_LISTS[args.prompt_index],
+    #     'avg_scores': avg_scores,
+    #     'results': evaluate_results
+    # }
+    # output_eval_file = os.path.join(output_evaluation_path, f"evaluate_results.json")
+    # if not os.path.exists(output_evaluation_path):
+    #     os.makedirs(output_evaluation_path)
+    # with open(output_eval_file, 'w') as f:
+    #     json.dump(save_results, f, indent=4)
+    # print(f"Saved evaluation results to {output_eval_file}")
 
 if __name__ == '__main__':
     
@@ -283,6 +277,7 @@ if __name__ == '__main__':
     parser.add_argument("--use_color",  action="store_true", default=False)
     parser.add_argument("--use_normal",  action="store_true", default=False)
     parser.add_argument("--output_pc_path", type=str, default="data/adv_pc")
+    parser.add_argument("--output_visual_pc_path", type=str, default="data/adv_pc")
     
 
     # * data loader, batch_size, shuffle, num_workers
@@ -290,6 +285,7 @@ if __name__ == '__main__':
     parser.add_argument("--batch_size", type=int, default=32)
     parser.add_argument("--shuffle", type=bool, default=False)
     parser.add_argument("--num_workers", type=int, default=10)
+    
     
     # logging
     parser.add_argument("--wandb", action="store_true", default=False)
